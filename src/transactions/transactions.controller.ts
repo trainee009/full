@@ -1,0 +1,45 @@
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Req, Query, UseInterceptors } from '@nestjs/common';
+import { TransactionsService } from './transactions.service';
+import { TransferDto } from './dto/transfer.dto';
+import { UpdateTransactionDto } from './dto/update-transaction.dto';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { PaginationDto } from './dto/pagination.dto';
+import { PaginationInterceptor } from 'src/interceptors/pagination.interceptor';
+
+@Controller('transactions')
+@UseGuards(JwtAuthGuard)
+export class TransactionsController {
+  constructor(private readonly transactionsService: TransactionsService) {}
+
+  @Post(':id')
+  create(@Param('id') accountId: number, @Body() dto: TransferDto) {
+    return this.transactionsService.create(accountId, dto);
+  }
+  
+  @Post(':id')
+  transfer(@Param('id') accountId: number, @Body() dto: TransferDto) {
+    return this.transactionsService.transfer(accountId, dto);
+  }
+
+  @UseInterceptors(PaginationInterceptor)
+  @Get()
+  findAll(@Query() dto: PaginationDto) {
+    console.log(dto) 
+    return this.transactionsService.findAll(dto.page ?? 1, dto.limit ?? 10);
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.transactionsService.findOne(+id);
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() updateTransactionDto: UpdateTransactionDto) {
+    return this.transactionsService.update(+id, updateTransactionDto);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.transactionsService.remove(+id);
+  }
+}
