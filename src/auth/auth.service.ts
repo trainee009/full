@@ -5,17 +5,29 @@ import { UsersService } from 'src/users/users.service';
 
 import * as bcrypt from 'bcrypt'
 import { JwtService } from '@nestjs/jwt';
-import { Response } from 'express';
+import { Request, Response } from 'express';
+import { MoreThan, Repository } from 'typeorm';
+import { Session } from 'src/sessions/entity/session.entity';
+import { InjectRepository } from '@nestjs/typeorm';
 
 @Injectable()
 export class AuthService {
     constructor(
         private readonly usersService: UsersService,
         private readonly jwtService: JwtService,
+        @InjectRepository(Session) private sessionRepo: Repository<Session>,
     ) {}
 
+    private parseDevice(userAgent?: string): string {
+        if (!userAgent) return 'Unknown';
+        if (userAgent.includes('Mobile')) return 'Mobile';
+        if (userAgent.includes('Windows')) return 'Windows';
+        if (userAgent.includes('Mac')) return 'Mac';
+        return 'Desktop';
+    }
 
-    async register(dto: RegisterDto, res: Response) {
+
+    async register(dto: RegisterDto, res: Response, req: Request) {
         const existing = await this.usersService.ensureEmailNotTaken(dto.email);
 
         if (!existing) throw new ConflictException('Email already in use');
@@ -29,71 +41,143 @@ export class AuthService {
 
         if (!newUser) throw new ConflictException('Error in register');
         
-        return this.login(dto, res);
+        return this.login(dto, res, req);
     }
 
-    async login(dto: LoginDto, res: Response) {
+    async login(dto: LoginDto, res: Response, req: Request) {
         const user = await this.usersService.findByEmail(dto.email);
-
         if (!user) throw new UnauthorizedException('Invalid credentials');
 
         const isPasswordValid = await bcrypt.compare(dto.password, user.password);
-
         if (!isPasswordValid) throw new UnauthorizedException('Invalid credentials');
 
-        const payload = { sub: user.id, email: user.email };
+        const sessions = await this.sessionRepo.find({
+            where: { user: { id: user.id }, revoked: false },
+            order: { loggedInAt: 'DESC' },
+        });
 
-        const token = this.jwtService.sign(payload);
+        if (sessions.length >= 5) {
+            await this.sessionRepo.update(sessions[0].id, {
+                revoked: true,
+            });
+            console.log(sessions[0], 'revoked')
+        }
 
-        res.cookie('access_token', token, {
+        const payload = { sub: user.id };
+        const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
+
+        // Create refresh token
+        const rawRefreshToken = crypto.randomUUID();
+
+        const refreshTokenHash = await bcrypt.hash(rawRefreshToken, 10);
+
+        const session = this.sessionRepo.create({
+            user,
+            refreshTokenHash,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+            device: this.parseDevice(req.headers['user-agent']),
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            loggedInAt: new Date(),
+            lastUsedAt: new Date(),
+            revoked: false,
+        });
+
+        await this.sessionRepo.save(session);
+
+        // ✅ Set access token cookie
+        res.cookie('access_token', accessToken, {
             httpOnly: true,
-            secure: false, // true in production
+            secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
-            maxAge: 60 * 60 * 1000,
-        })
+            maxAge: 15 * 60 * 1000, // 15 minutes
+        });
 
-        res.cookie('refresh_token', token, {
+        // ✅ Set refresh token cookie with session ID
+        res.cookie('refresh_token', `${session.id}.${rawRefreshToken}`, {
             httpOnly: true,
-            secure: false, // true in production
+            secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        })
+            maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+        });
 
         return { message: 'Logged in successfully' };
-    }
+        }
 
-    async logout(res: any) {
+
+    async logout(req: Request, res: Response) {
+        const token = req.cookies['refresh_token'];
+
+        if (token) {
+            const [sessionId] = token.split('.');
+            if (sessionId) {
+                await this.sessionRepo.update(sessionId, { revoked: true });
+            }
+        }
+
         res.clearCookie('access_token');
         res.clearCookie('refresh_token');
         
         return { message: 'Logged out successfully' };
     }
 
-    async refresh(req: any, res: any) {
-        const refreshToken = req.cookies['refresh_token'];
+    async refresh(req: Request, res: Response) {
+        const token = req.cookies['refresh_token'];
+        if (!token) throw new UnauthorizedException('Refresh token missing');
 
-        if (!refreshToken) throw new UnauthorizedException('Refresh token missing');
-
-        try {
-            const payload = this.jwtService.verify(refreshToken, {
-                secret: process.env.JWT_SECRET || 'test',
-            })
-
-            const newAccessToken = this.jwtService.sign(
-                { sub: payload.sub, email: payload.email },
-                { expiresIn: '1h' },
-            )
-
-            res.cookie('access_token', newAccessToken, {
-                httpOnly: true,
-                secure: false,
-                sameSite: 'lax',
-                maxAge: 60 * 60 * 1000,
-            })
-
-            return { message: 'Token refreshed' }
-        } catch (error) {
-            throw new UnauthorizedException('Invalid refresh token')
+        const [sessionId, rawToken] = token.split('.');
+        // console.log(sessionId)
+        // console.log(rawToken)
+        if (!sessionId || !rawToken) {
+            throw new UnauthorizedException('Malformed refresh token');
         }
-    }
+
+        // Fetch session from DB
+        const session = await this.sessionRepo.findOne({
+            where: {
+            id: sessionId,
+            revoked: false,
+            expiresAt: MoreThan(new Date()),
+
+            },
+            relations: ['user'],
+        });
+
+        if (!session || !(await bcrypt.compare(rawToken, session.refreshTokenHash))) {
+            throw new UnauthorizedException('Invalid refresh token');
+        }
+
+        // Generate new tokens
+        const newAccessToken = this.jwtService.sign(
+            { sub: session.user.id },
+            { expiresIn: '15m' },
+        );
+
+        const newRawRefreshToken = crypto.randomUUID();
+        const newRefreshTokenHash = await bcrypt.hash(newRawRefreshToken, 10);
+
+        // Rotate the refresh token in the DB
+        session.refreshTokenHash = newRefreshTokenHash;
+        session.lastUsedAt = new Date();
+        session.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+        await this.sessionRepo.save(session);
+
+        // Set new cookies
+        res.cookie('access_token', newAccessToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 15 * 60 * 1000, // 15 minutes
+        });
+
+        res.cookie('refresh_token', `${session.id}.${newRawRefreshToken}`, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+        });
+
+        return { message: 'Token refreshed' };
+        }
+
 }
