@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { AccountsModule } from './accounts/accounts.module';
 import { SharedModule } from './shared/shared.module';
+import { SessionsModule } from './sessions/sessions.module';
 
 @Module({
   imports: [
@@ -28,7 +29,8 @@ import { SharedModule } from './shared/shared.module';
     AuthModule,
     TransactionsModule,
     AccountsModule,
-    SharedModule
+    SharedModule,
+    SessionsModule
   ],
   controllers: [AppController],
   providers: [AppService],

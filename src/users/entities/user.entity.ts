@@ -1,4 +1,5 @@
 import { Account } from "src/accounts/entities/account.entity";
+import { Session } from "src/sessions/entity/session.entity";
 import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 @Entity()
@@ -20,4 +21,7 @@ export class User {
 
     @OneToMany(() => Account, (account) => account.owner)
     accounts: Account[];
+
+    @OneToMany(() => Session, (session) => session.user)
+    sessions: Session[];
 }
