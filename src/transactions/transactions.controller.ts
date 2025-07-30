@@ -5,18 +5,15 @@ import { UpdateTransactionDto } from './dto/update-transaction.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { PaginationDto } from './dto/pagination.dto';
 import { PaginationInterceptor } from 'src/interceptors/pagination.interceptor';
+import { TransactionsInterceptor } from 'src/interceptors/transactions.interceptor';
 
 @Controller('transactions')
 @UseGuards(JwtAuthGuard)
+@UseInterceptors(TransactionsInterceptor)
 export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) {}
-
-  @Post(':id')
-  create(@Param('id') accountId: number, @Body() dto: TransferDto) {
-    return this.transactionsService.create(accountId, dto);
-  }
   
-  @Post(':id')
+  @Post('transfer/:id')
   transfer(@Param('id') accountId: number, @Body() dto: TransferDto) {
     return this.transactionsService.transfer(accountId, dto);
   }

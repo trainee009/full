@@ -1,10 +1,12 @@
-import { Body, Controller, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Patch, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { Request, Response } from 'express';
 import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { VerifyOTPDto } from './dto/verify-otp.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -29,5 +31,20 @@ export class AuthController {
   @Post('refresh')
   async refresh(@Req() req: any, @Res({ passthrough: true }) res: Response) {
     return this.authService.refresh(req, res);
+  }
+
+  @Post('forgot-password')
+  async forgotPassword(@Body('email') email: string) {
+    return await this.authService.forgotPassword(email);
+  }
+  
+  @Post('verify-otp')
+  async verifyOTP(@Body() dto: VerifyOTPDto) {
+    return await this.authService.verifyOTP(dto);
+  }
+
+  @Patch('change-password')
+  async changePassword(@Body() dto: ChangePasswordDto) {
+    return await this.authService.changePassword(dto);
   }
 }

@@ -7,7 +7,6 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { AccountsModule } from './accounts/accounts.module';
-import { SharedModule } from './shared/shared.module';
 import { SessionsModule } from './sessions/sessions.module';
 
 @Module({
@@ -29,7 +28,6 @@ import { SessionsModule } from './sessions/sessions.module';
     AuthModule,
     TransactionsModule,
     AccountsModule,
-    SharedModule,
     SessionsModule
   ],
   controllers: [AppController],

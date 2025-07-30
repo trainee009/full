@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { UsersService } from 'src/users/users.service';
@@ -9,6 +9,11 @@ import { Request, Response } from 'express';
 import { MoreThan, Repository } from 'typeorm';
 import { Session } from 'src/sessions/entity/session.entity';
 import { InjectRepository } from '@nestjs/typeorm';
+
+
+import * as nodeMailer from 'nodemailer'
+import { VerifyOTPDto } from './dto/verify-otp.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Injectable()
 export class AuthService {
@@ -178,6 +183,60 @@ export class AuthService {
         });
 
         return { message: 'Token refreshed' };
-        }
+    }
 
+    async forgotPassword(email: string) {
+        const user = await this.usersService.findByEmail(email);
+
+        if (!user) throw new NotFoundException('User not found');
+
+        const otp = Math.floor(100000 + Math.random() * 900000);
+
+        // Setting the otp here
+        await this.usersService.setOTP(user.id, otp);
+
+        const transporter = nodeMailer.createTransport({
+            service: 'gmail',
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS,
+            },
+        });
+
+
+        await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: 'Your OTP code',
+            html: `Your verification code is: <b>${otp}</b>`
+        })
+
+        return { message: 'Your OTP sent to your email' };
+    }
+
+    async verifyOTP(dto: VerifyOTPDto) {
+        const user = await this.usersService.findByEmail(dto.email);
+        
+        if (!user) throw new NotFoundException('User not found');
+
+        if (user.otp !== dto.otp) throw new Error('OTP is not correct');
+
+        user.changePassword = true;
+
+        await this.usersService.setChangePassword(user.email);
+        
+        return { message: 'OTP verified' };
+    }
+
+    async changePassword(dto: ChangePasswordDto) {
+        const user = await this.usersService.findByEmail(dto.email);
+
+        if (!user) throw new NotFoundException('User not found');
+
+        if (user.changePassword === false) throw new Error('Cannot change the password');
+
+        const hashedPassword = await bcrypt.hash(dto.newPassword, 10);
+
+        return await this.usersService.changePassword(user, hashedPassword);
+    }
 }

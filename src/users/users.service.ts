@@ -45,10 +45,40 @@ export class UsersService {
     return `This action returns a #${id} user`;
   }
 
-  update(id: number, updateUserDto: UpdateUserDto) {
-    return `This action updates a #${id} user`;
+  async setOTP(id: number, otp: number) {
+    const user = await this.userRepo.update(id, {
+      otp,
+    })
+    
+    if (user.affected === 0) throw new Error('Can not set otp');
+
+    return { message: 'otp setted successfully' };
   }
 
+  async setChangePassword(email: string) {
+    const user = await this.findByEmail(email);
+
+    if (!user) throw new NotFoundException('User not found');
+
+    await this.userRepo.update(user.id, {
+      ...user,
+      changePassword: true,
+    });
+
+    return { message: 'You can now chang ethe password' };
+  }
+
+  async changePassword(user: User, newPassword: string) {
+    const updatedUser = await this.userRepo.update(user.id, {
+      ...user,
+      password: newPassword,
+      changePassword: false, // settting to not able to change
+    })
+
+    if (updatedUser.affected === 0) throw new Error('Error while changing password');
+
+    return { message: 'Password changed successfully' };
+  }
   remove(id: number) {
     return `This action removes a #${id} user`;
   }
