@@ -24,4 +24,10 @@ export class User {
 
     @OneToMany(() => Session, (session) => session.user)
     sessions: Session[];
+
+    @Column({ nullable: true })
+    otp?: number;
+
+    @Column({ default: false })
+    changePassword: boolean;
 }
