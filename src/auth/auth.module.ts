@@ -7,6 +7,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { RefreshJwtStrategy } from './strategies/refresh-jwt.strategy';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Session } from 'src/sessions/entity/session.entity';
+import { RedisModule } from 'src/redis/redis.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { Session } from 'src/sessions/entity/session.entity';
       signOptions: { expiresIn: '1h' },
     }),
     UsersModule,
+    RedisModule
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, RefreshJwtStrategy],

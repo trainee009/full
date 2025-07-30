@@ -25,6 +25,11 @@ export class TransactionsController {
     return this.transactionsService.findAll(dto.page ?? 1, dto.limit ?? 10);
   }
 
+  @Get('last-transactions')
+  async lastTransactions() {
+    return await this.transactionsService.lastTransactions();
+  }
+  
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.transactionsService.findOne(+id);

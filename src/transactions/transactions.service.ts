@@ -7,11 +7,13 @@ import { Account } from 'src/accounts/entities/account.entity';
 import { Transaction } from './entities/transaction.entity';
 import Decimal from 'decimal.js';
 import { REQUEST } from '@nestjs/core';
+import { RedisClientType } from 'redis';
 
 @Injectable({ scope: Scope.REQUEST })
 export class TransactionsService {
   constructor(
     @Inject(REQUEST) private readonly request: any,
+    @Inject('REDIS_CLIENT') private readonly redisClient: RedisClientType,
     @InjectRepository(Transaction) private readonly transactionRepo: Repository<Transaction>,
   ) {}
 
@@ -50,6 +52,19 @@ export class TransactionsService {
       account: userAccount,
       targetAccountId: String(targetAccount.id),
     });
+
+    const totalTransactions = await queryRunner.manager.count(Transaction);
+
+    const totalPages = Math.ceil(totalTransactions / 5);
+
+    const lastTransactions = await queryRunner.manager.find(Transaction, {
+      skip: (totalPages - 1) * 5,
+      take: 5,
+      order: { createdAt: 'ASC' }
+    })
+
+    await this.redisClient.set('last_transactions', JSON.stringify(lastTransactions));
+
     return { message: 'Transferred successfully' };
   }
 
@@ -65,6 +80,27 @@ export class TransactionsService {
       page,
       limit,
     };
+  }
+
+  async lastTransactions() {
+    const cached = await this.redisClient.get('last_transactions');
+    
+    if (cached) {
+      const lastTransactions = JSON.parse(cached);
+      console.log('from cache')
+      return lastTransactions;
+    }
+
+    const totalTransactions = await this.transactionRepo.count();
+
+    const totalPages = Math.ceil(totalTransactions / 5);
+
+    const lastTransactions = await this.transactionRepo.find({
+      skip: (totalPages - 1) * 5,
+      take: 5,
+      order: { createdAt: 'ASC' }
+    })
+    return lastTransactions;
   }
 
   findOne(id: number) {

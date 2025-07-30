@@ -45,16 +45,6 @@ export class UsersService {
     return `This action returns a #${id} user`;
   }
 
-  async setOTP(id: number, otp: number) {
-    const user = await this.userRepo.update(id, {
-      otp,
-    })
-    
-    if (user.affected === 0) throw new Error('Can not set otp');
-
-    return { message: 'otp setted successfully' };
-  }
-
   async setChangePassword(email: string) {
     const user = await this.findByEmail(email);
 

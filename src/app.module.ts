@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { AccountsModule } from './accounts/accounts.module';
 import { SessionsModule } from './sessions/sessions.module';
+import { RedisModule } from './redis/redis.module';
 
 @Module({
   imports: [
@@ -28,7 +29,8 @@ import { SessionsModule } from './sessions/sessions.module';
     AuthModule,
     TransactionsModule,
     AccountsModule,
-    SessionsModule
+    SessionsModule,
+    RedisModule
   ],
   controllers: [AppController],
   providers: [AppService],
